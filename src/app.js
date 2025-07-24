@@ -3,14 +3,20 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 // Charger les variables d'environnement
 require('dotenv').config();
 
+// Importation des middlewares et utilitaires
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { logger } = require('./utils/logger');
+
 // Import des routes
 const depositRoutes = require('./routes/depositRoutes');
 const callbackRoutes = require('./routes/callbackRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 // Initialiser l'application Express
 const app = express();
@@ -25,6 +31,48 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limite de 100 requêtes par fenêtre
+  message: {
+    success: false,
+    message: 'Trop de requêtes, veuillez réessayer plus tard'
+  }
+});
+app.use('/api/', limiter);
+
+// Rate limiting spécial pour les dépôts
+const depositLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // limite de 5 dépôts par minute
+  message: {
+    success: false,
+    message: 'Trop de tentatives de dépôt, veuillez attendre'
+  }
+});
+
+// Middleware de logging des requêtes
+app.use((req, res, next) => {
+  logger.info('Request', {
+    method: req.method,
+    url: req.url,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
+  next();
+});
+
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API FedaPay opérationnelle',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
 
 // Logger pour le développement
 if (process.env.NODE_ENV === 'development') {
@@ -61,8 +109,9 @@ app.get('/health', (req, res) => {
 });
 
 // Routes de l'API
-app.use('/api/deposits', depositRoutes);
-app.use('/api/payments', callbackRoutes);
+app.use('/api/deposits', depositLimiter, depositRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/callback', callbackRoutes);
 
 // Middleware pour gérer les routes non trouvées
 app.use('*', (req, res) => {
@@ -109,6 +158,29 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('Promesse rejetée non gérée:', reason);
   process.exit(1);
 });
+
+// Gestion des routes non trouvées
+app.use(notFoundHandler);
+
+// Middleware de gestion d'erreurs (doit être en dernier)
+app.use(errorHandler);
+
+// Gestion des erreurs non capturées
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', {
+    reason: reason.toString(),
+    stack: reason.stack
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack
+  });
+  process.exit(1);
+});
+
 
 // Démarrer le serveur
 const PORT = process.env.PORT || 5000;

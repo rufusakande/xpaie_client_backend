@@ -1,13 +1,21 @@
 // routes/depositRoutes.js
 const express = require('express');
 const router = express.Router();
-const { 
-  createDeposit, 
-  getUserTransactions, 
-  getTransaction 
+
+// Importation des contrôleurs
+const {
+  createAutomaticDeposit,
+  createDeposit
 } = require('../controllers/depositController');
 
-// Middleware de validation (optionnel)
+const {
+  getUserTransactions,
+  getTransaction,
+  updateTransactionStatus,
+  getUserTransactionStats
+} = require('../controllers/transactionController');
+
+// Middleware de validation
 const validateDepositData = (req, res, next) => {
   const { amount, customer, userId } = req.body;
 
@@ -35,9 +43,14 @@ const validateDepositData = (req, res, next) => {
   next();
 };
 
-// Routes
-router.post('/create', validateDepositData, createDeposit);
+// Routes pour les dépôts
+router.post('/create/automatic', validateDepositData, createAutomaticDeposit);
+router.post('/create/manual', validateDepositData, createDeposit);
+
+// Routes pour les transactions
 router.get('/user/:userId', getUserTransactions);
+router.get('/user/:userId/stats', getUserTransactionStats);
 router.get('/:transactionId', getTransaction);
+router.put('/:transactionId/status', updateTransactionStatus);
 
 module.exports = router;
