@@ -17,9 +17,6 @@ const createDeposit = async (req, res) => {
         message: 'Montant, informations client et ID utilisateur requis'
       });
     }
-
-    console.log('Données de dépôt reçues:', req.body);
-
     // Validation du montant minimum (par exemple 100 XOF)
     if (parseInt(amount) < 100) {
       return res.status(400).json({
@@ -54,7 +51,8 @@ const createDeposit = async (req, res) => {
         lastname: customer.lastname || userData.name.split(' ')[1] || '',
         email: customer.email || userData.email,
         phone_number: {
-          number: customer.phone_number.replace(/\D/g, ''),
+          /* number: customer.phone_number.replace(/\D/g, ''), */
+          number: '+22997808080',
           country: customer.country || userData.country || 'BJ'
         }
       }
